@@ -3214,6 +3214,7 @@ impl App {
 
     /// Find line boundaries for the row containing the click.
     /// Returns (start_row, end_row) for the line.
+    #[allow(dead_code)]
     fn find_line_boundaries(&self, row: u16) -> Option<(u16, u16)> {
         let msg_area = self.last_msg_area.get();
         let line_start = msg_area.y;

@@ -619,26 +619,23 @@ fn prefix_message_lines(
         return rendered;
     }
 
-    let (prefix, prefix_style, body_style, role_indicator) = match role {
+    let (prefix, prefix_style, body_style) = match role {
         Role::User => (
             "› ",
             Style::default()
                 .fg(Color::Rgb(233, 30, 99))
                 .add_modifier(Modifier::BOLD),
             Style::default().fg(Color::White),
-            "[You] ",
         ),
         Role::Assistant => (
             "◆ ",
             Style::default().fg(Color::Rgb(0, 150, 200)).add_modifier(Modifier::BOLD),
             Style::default().fg(Color::White),
-            "[Claude] ",
         ),
     };
 
     if let Some(first) = rendered.first_mut() {
-        let mut spans = Vec::with_capacity(first.spans.len() + 2);
-        spans.push(Span::styled(role_indicator.to_string(), prefix_style));
+        let mut spans = Vec::with_capacity(first.spans.len() + 1);
         spans.push(Span::styled(prefix.to_string(), prefix_style));
         spans.extend(first.spans.clone());
         first.spans = spans;
