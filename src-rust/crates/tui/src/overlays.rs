@@ -4,12 +4,20 @@
 //   - MessageSelectorOverlay (/rewind step 1)
 //   - RewindFlowOverlay (/rewind full multi-step flow)
 
+use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
+
+pub const CLAURST_ACCENT: Color = Color::Rgb(233, 30, 99);
+pub const CLAURST_PANEL_BG: Color = Color::Rgb(30, 30, 35);
+pub const CLAURST_PANEL_BORDER: Color = Color::Rgb(72, 72, 80);
+pub const CLAURST_TEXT: Color = Color::Rgb(235, 235, 240);
+pub const CLAURST_MUTED: Color = Color::Rgb(110, 110, 118);
+pub const CLAURST_OVERLAY_BG: Color = Color::Rgb(10, 10, 14);
 
 // ---------------------------------------------------------------------------
 // Geometry helper (shared)
@@ -34,11 +42,15 @@ pub fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
 /// Darken the entire screen with a semi-transparent overlay.
 /// Call this BEFORE rendering any dialog content.
 pub fn render_dark_overlay(frame: &mut Frame, area: Rect) {
+    render_dark_overlay_buf(frame.buffer_mut(), area);
+}
+
+pub fn render_dark_overlay_buf(buf: &mut Buffer, area: Rect) {
     for y in area.y..area.y + area.height {
         for x in area.x..area.x + area.width {
-            if let Some(cell) = frame.buffer_mut().cell_mut((x, y)) {
-                cell.set_bg(Color::Rgb(10, 10, 14));
-                cell.set_fg(Color::Rgb(40, 40, 45));
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.set_bg(CLAURST_OVERLAY_BG);
+                cell.set_fg(CLAURST_MUTED);
             }
         }
     }
@@ -46,13 +58,16 @@ pub fn render_dark_overlay(frame: &mut Frame, area: Rect) {
 
 /// Fill a rectangle with the standard dialog background color (no border).
 pub fn render_dialog_bg(frame: &mut Frame, area: Rect) {
-    let bg = Color::Rgb(30, 30, 35);
+    render_dialog_bg_buf(frame.buffer_mut(), area);
+}
+
+pub fn render_dialog_bg_buf(buf: &mut Buffer, area: Rect) {
     for y in area.y..area.y + area.height {
         for x in area.x..area.x + area.width {
-            if let Some(cell) = frame.buffer_mut().cell_mut((x, y)) {
+            if let Some(cell) = buf.cell_mut((x, y)) {
                 cell.set_char(' ');
-                cell.set_bg(bg);
-                cell.set_fg(Color::White);
+                cell.set_bg(CLAURST_PANEL_BG);
+                cell.set_fg(CLAURST_TEXT);
             }
         }
     }
@@ -144,20 +159,24 @@ pub fn render_help_overlay(frame: &mut Frame, overlay: &HelpOverlay, area: Rect)
         return;
     }
 
+    render_dark_overlay(frame, area);
+
     let dialog_width = 92u16.min(area.width.saturating_sub(2));
     let dialog_height = 34u16.min(area.height.saturating_sub(2));
     let dialog_area = centered_rect(dialog_width, dialog_height, area);
 
     frame.render_widget(Clear, dialog_area);
+    render_dialog_bg(frame, dialog_area);
 
     // Outer block
     let block = Block::default()
         .borders(Borders::ALL)
         .title(Line::from(vec![
-            Span::styled(" Help ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled("— Claurst  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(" Help ", Style::default().fg(CLAURST_ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled("— Claurst  ", Style::default().fg(CLAURST_MUTED)),
         ]))
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(CLAURST_PANEL_BORDER))
+        .style(Style::default().bg(CLAURST_PANEL_BG).fg(CLAURST_TEXT));
     frame.render_widget(block, dialog_area);
 
     let inner = Rect {

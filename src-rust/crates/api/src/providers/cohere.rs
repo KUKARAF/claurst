@@ -26,6 +26,7 @@ use crate::provider_types::{
 // Re-use OpenAI message transformation helpers since Cohere v2 uses the same
 // messages array shape (role/content/tool_calls/tool_call_id).
 use super::openai::OpenAiProvider;
+use super::request_options::merge_root_options;
 
 // ---------------------------------------------------------------------------
 // CohereProvider
@@ -145,6 +146,7 @@ impl CohereProvider {
         if !request.stop_sequences.is_empty() {
             body["stop_sequences"] = json!(request.stop_sequences);
         }
+        merge_root_options(&mut body, &request.provider_options);
 
         let resp = self
             .http_client
@@ -276,6 +278,7 @@ impl CohereProvider {
         if !request.stop_sequences.is_empty() {
             body["stop_sequences"] = json!(request.stop_sequences);
         }
+        merge_root_options(&mut body, &request.provider_options);
 
         let resp = self
             .http_client

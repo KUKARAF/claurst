@@ -5,6 +5,8 @@
 
 use serde::Deserialize;
 
+const DEVICE_FLOW_USER_AGENT: &str = "claurst/0.0.7";
+
 /// Response from the device authorization endpoint.
 #[derive(Debug, Deserialize)]
 pub struct DeviceCodeResponse {
@@ -27,7 +29,12 @@ pub async fn request_device_code(
     let resp = client
         .post(device_code_url)
         .header("Accept", "application/json")
-        .form(&[("client_id", client_id), ("scope", scope)])
+        .header("Content-Type", "application/json")
+        .header("User-Agent", DEVICE_FLOW_USER_AGENT)
+        .json(&serde_json::json!({
+            "client_id": client_id,
+            "scope": scope,
+        }))
         .send()
         .await
         .map_err(|e| e.to_string())?;
@@ -60,14 +67,13 @@ pub async fn poll_for_token(
         let resp = client
             .post(token_url)
             .header("Accept", "application/json")
-            .form(&[
-                ("client_id", client_id),
-                ("device_code", device_code),
-                (
-                    "grant_type",
-                    "urn:ietf:params:oauth:grant-type:device_code",
-                ),
-            ])
+            .header("Content-Type", "application/json")
+            .header("User-Agent", DEVICE_FLOW_USER_AGENT)
+            .json(&serde_json::json!({
+                "client_id": client_id,
+                "device_code": device_code,
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+            }))
             .send()
             .await
             .map_err(|e| e.to_string())?;

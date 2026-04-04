@@ -24,6 +24,7 @@ use crate::provider_types::{
 
 // Re-use the message transformation helpers from openai.rs.
 use super::openai::OpenAiProvider;
+use super::request_options::merge_openai_compatible_options;
 
 // ---------------------------------------------------------------------------
 // ProviderQuirks
@@ -282,6 +283,7 @@ impl OpenAiCompatProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let builder = self
@@ -359,6 +361,7 @@ impl OpenAiCompatProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
         let builder = self

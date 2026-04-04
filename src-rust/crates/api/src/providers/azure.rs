@@ -26,6 +26,8 @@ use crate::provider_types::{
 };
 use crate::providers::openai::OpenAiProvider;
 
+use super::request_options::merge_openai_compatible_options;
+
 // ---------------------------------------------------------------------------
 // AzureProvider
 // ---------------------------------------------------------------------------
@@ -107,6 +109,7 @@ impl AzureProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let url = self.endpoint_url(&request.model);
 
@@ -177,6 +180,7 @@ impl AzureProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let url = self.endpoint_url(&request.model);
 

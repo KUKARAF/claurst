@@ -85,12 +85,12 @@ pub fn rustle_lines(pose: &RustlePose) -> [Line<'static>; 5] {
     let (r2l, r2e, r2r) = match pose {
         RustlePose::Default => (
             "█▄█",       // left claw tip, ▄ gap-to-connect, head edge
-            "▀ █ ▀",    // single-pixel upper-half eyes (centered gaze)
+            "▀ █ ▘",    // keep the left eye as-is; shift only the right eye highlight left
             "█▄█",       // head edge, ▄ connect-to-gap, right claw tip
         ),
         RustlePose::ArmsUp => (
             "█▀█",       // ▀ = claw raised (upper half = arm up)
-            "▀ █ ▀",    // single-pixel upper-half eyes (centered gaze)
+            "▀ █ ▘",    // keep the left eye as-is; shift only the right eye highlight left
             "█▀█",       // raised right claw
         ),
         RustlePose::LookLeft => (

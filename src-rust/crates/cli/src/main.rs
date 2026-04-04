@@ -1239,7 +1239,7 @@ async fn run_interactive(
                 .unwrap_or_else(|_| "https://models.dev/api.json".to_string());
             if let Ok(resp) = client
                 .get(&url)
-                .header("User-Agent", "Claurst/0.0.6")
+                .header("User-Agent", "Claurst/0.0.7")
                 .send()
                 .await
             {
@@ -2304,7 +2304,8 @@ async fn run_interactive(
             match provider_id.as_str() {
                 "github-copilot" => {
                     let tx2 = device_auth_tx.clone();
-                    // Claurst's own registered GitHub OAuth App
+                    // Use Claurst's GitHub Copilot device flow app so the returned
+                    // token stays bound to Claurst's own OAuth registration.
                     const COPILOT_CLIENT_ID: &str = "Iv23li4E44oPZR1huPU9";
                     tokio::spawn(async move {
                         // Step 1: Request device code

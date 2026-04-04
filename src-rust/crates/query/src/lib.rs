@@ -186,6 +186,224 @@ impl QueryConfig {
     }
 }
 
+fn reasoning_effort_for_level(
+    effort_level: claurst_core::effort::EffortLevel,
+) -> &'static str {
+    match effort_level {
+        claurst_core::effort::EffortLevel::Low => "low",
+        claurst_core::effort::EffortLevel::Medium => "medium",
+        claurst_core::effort::EffortLevel::High | claurst_core::effort::EffortLevel::Max => {
+            "high"
+        }
+    }
+}
+
+fn google_thinking_level_for_effort(
+    effort_level: Option<claurst_core::effort::EffortLevel>,
+) -> &'static str {
+    match effort_level.unwrap_or(claurst_core::effort::EffortLevel::High) {
+        claurst_core::effort::EffortLevel::Low => "low",
+        claurst_core::effort::EffortLevel::Medium => "medium",
+        claurst_core::effort::EffortLevel::High | claurst_core::effort::EffortLevel::Max => {
+            "high"
+        }
+    }
+}
+
+fn is_openai_reasoning_model(model_id: &str) -> bool {
+    let model_id = model_id.to_ascii_lowercase();
+    model_id.starts_with("gpt-5")
+        || model_id.starts_with("o1")
+        || model_id.starts_with("o3")
+        || model_id.starts_with("o4")
+}
+
+fn is_openaiish_provider(provider_id: &str) -> bool {
+    matches!(
+        provider_id,
+        "openai"
+            | "azure"
+            | "groq"
+            | "mistral"
+            | "deepseek"
+            | "xai"
+            | "openrouter"
+            | "togetherai"
+            | "together-ai"
+            | "perplexity"
+            | "cerebras"
+            | "deepinfra"
+            | "venice"
+            | "huggingface"
+            | "nvidia"
+            | "siliconflow"
+            | "sambanova"
+            | "moonshot"
+            | "zhipu"
+            | "qwen"
+            | "nebius"
+            | "novita"
+            | "ovhcloud"
+            | "scaleway"
+            | "vultr"
+            | "vultr-ai"
+            | "baseten"
+            | "friendli"
+            | "upstage"
+            | "stepfun"
+            | "fireworks"
+            | "ollama"
+            | "lmstudio"
+            | "lm-studio"
+            | "llamacpp"
+            | "llama-cpp"
+    )
+}
+
+fn build_provider_options(
+    provider_id: &str,
+    model_id: &str,
+    effort_level: Option<claurst_core::effort::EffortLevel>,
+    thinking_budget: Option<u32>,
+) -> Value {
+    let mut options = serde_json::Map::new();
+    let model_id = model_id.to_ascii_lowercase();
+
+    if provider_id == "github-copilot" {
+        if model_id.contains("claude") {
+            options.insert(
+                "thinking_budget".to_string(),
+                serde_json::json!(thinking_budget.unwrap_or(4_000)),
+            );
+        } else if model_id.starts_with("gpt-5") && !model_id.contains("gpt-5-pro") {
+            let reasoning_effort = effort_level
+                .map(reasoning_effort_for_level)
+                .unwrap_or("medium");
+            options.insert(
+                "reasoningEffort".to_string(),
+                serde_json::json!(reasoning_effort),
+            );
+            options.insert(
+                "reasoningSummary".to_string(),
+                serde_json::json!("auto"),
+            );
+            options.insert(
+                "include".to_string(),
+                serde_json::json!(["reasoning.encrypted_content"]),
+            );
+
+            if model_id.contains("gpt-5.")
+                && !model_id.contains("codex")
+                && !model_id.contains("-chat")
+            {
+                options.insert(
+                    "textVerbosity".to_string(),
+                    serde_json::json!("low"),
+                );
+            }
+        }
+    }
+
+    if provider_id == "google" && model_id.contains("gemini") {
+        if model_id.contains("2.5") {
+            if let Some(budget) = thinking_budget {
+                options.insert(
+                    "thinkingConfig".to_string(),
+                    serde_json::json!({
+                        "includeThoughts": true,
+                        "thinkingBudget": budget,
+                    }),
+                );
+            }
+        } else if model_id.contains("3.") || model_id.contains("gemini-3") {
+            options.insert(
+                "thinkingConfig".to_string(),
+                serde_json::json!({
+                    "includeThoughts": true,
+                    "thinkingLevel": google_thinking_level_for_effort(effort_level),
+                }),
+            );
+        }
+    }
+
+    if provider_id == "amazon-bedrock" {
+        if model_id.contains("anthropic") || model_id.contains("claude") {
+            if let Some(budget) = thinking_budget {
+                options.insert(
+                    "reasoningConfig".to_string(),
+                    serde_json::json!({
+                        "type": "enabled",
+                        "budgetTokens": budget.min(31_999),
+                    }),
+                );
+            }
+        } else if let Some(level) = effort_level {
+            options.insert(
+                "reasoningConfig".to_string(),
+                serde_json::json!({
+                    "type": "enabled",
+                    "maxReasoningEffort": reasoning_effort_for_level(level),
+                }),
+            );
+        }
+    }
+
+    if is_openaiish_provider(provider_id) && is_openai_reasoning_model(&model_id) {
+        let reasoning_effort = effort_level
+            .map(reasoning_effort_for_level)
+            .unwrap_or("medium");
+        options.insert(
+            "reasoningEffort".to_string(),
+            serde_json::json!(reasoning_effort),
+        );
+
+        if model_id.starts_with("gpt-5")
+            && model_id.contains("gpt-5.")
+            && !model_id.contains("codex")
+            && !model_id.contains("-chat")
+            && provider_id != "azure"
+        {
+            options.insert(
+                "textVerbosity".to_string(),
+                serde_json::json!("low"),
+            );
+        }
+    }
+
+    if provider_id == "openrouter" {
+        options.insert("usage".to_string(), serde_json::json!({ "include": true }));
+        if model_id.contains("gemini-3") {
+            options.insert(
+                "reasoning".to_string(),
+                serde_json::json!({ "effort": "high" }),
+            );
+        }
+    }
+
+    if provider_id == "qwen"
+        && thinking_budget.is_some()
+        && !model_id.contains("kimi-k2-thinking")
+    {
+        options.insert("enable_thinking".to_string(), serde_json::json!(true));
+    }
+
+    if provider_id == "zhipu" && thinking_budget.is_some() {
+        options.insert(
+            "thinking".to_string(),
+            serde_json::json!({
+                "type": "enabled",
+                "clear_thinking": false,
+            }),
+        );
+    }
+
+    if options.is_empty() {
+        Value::Null
+    } else {
+        Value::Object(options)
+    }
+}
+
 /// Events emitted by the query loop for the TUI to render.
 #[derive(Debug, Clone)]
 pub enum QueryEvent {
@@ -786,15 +1004,24 @@ pub async fn run_query_loop(
 
                     // Build ProviderRequest from the already-assembled request data.
                     // tools comes from the api_tools we already built above.
-                    let provider_tools: Vec<claurst_core::types::ToolDefinition> = tools
-                        .iter()
-                        .map(|t| t.to_definition())
-                        .collect();
-
                     // Filter unsupported modalities: replace Image/Document blocks
                     // with placeholder text when the provider doesn't support them,
                     // preventing crashes on text-only models.
-                    let caps = provider.capabilities();
+                    let mut caps = provider.capabilities();
+                    if let Some(model_entry) = config
+                        .model_registry
+                        .as_ref()
+                        .and_then(|model_registry| model_registry.get(&provider_id_str, &model_id_str))
+                    {
+                        caps.image_input = model_entry.vision;
+                        caps.tool_calling = model_entry.tool_calling;
+                        caps.thinking = model_entry.reasoning;
+                    }
+                    let provider_tools: Vec<claurst_core::types::ToolDefinition> = if caps.tool_calling {
+                        tools.iter().map(|t| t.to_definition()).collect()
+                    } else {
+                        Vec::new()
+                    };
                     let provider_messages: Vec<claurst_core::types::Message> = messages
                         .iter()
                         .map(|msg| {
@@ -830,8 +1057,18 @@ pub async fn run_query_loop(
                         top_p: None,
                         top_k: None,
                         stop_sequences: vec![],
-                        thinking: effective_thinking_budget.map(|b| claurst_api::ThinkingConfig::enabled(b)),
-                        provider_options: serde_json::Value::Null,
+                        thinking: if caps.thinking {
+                            effective_thinking_budget
+                                .map(|b| claurst_api::ThinkingConfig::enabled(b))
+                        } else {
+                            None
+                        },
+                        provider_options: build_provider_options(
+                            &provider_id_str,
+                            &model_id_str,
+                            config.effort_level,
+                            effective_thinking_budget,
+                        ),
                     };
 
                     // Use create_message_stream so the TUI receives real-time
@@ -1003,7 +1240,7 @@ pub async fn run_query_loop(
                         "mistral" => "Set MISTRAL_API_KEY.",
                         "deepseek" => "Set DEEPSEEK_API_KEY.",
                         "xai" => "Set XAI_API_KEY.",
-                        "github-copilot" => "Set GITHUB_TOKEN.",
+                        "github-copilot" => "Reconnect GitHub Copilot via /connect, or set GITHUB_TOKEN.",
                         "cohere" => "Set COHERE_API_KEY.",
                         _ => "Set the appropriate API key environment variable or use `claurst auth login`.",
                     };
@@ -1815,6 +2052,10 @@ mod tests {
             skill_index: None,
             max_budget_usd: None,
             fallback_model: None,
+            provider_registry: None,
+            agent_name: None,
+            agent_definition: None,
+            model_registry: None,
         }
     }
 
@@ -1942,6 +2183,51 @@ mod tests {
         let err_outcome = QueryOutcome::Error(claurst_core::error::ClaudeError::RateLimit);
         let s2 = format!("{:?}", err_outcome);
         assert!(s2.contains("Error"));
+    }
+
+    #[test]
+    fn test_build_provider_options_for_google_gemini_3() {
+        let options = build_provider_options(
+            "google",
+            "gemini-3-flash-preview",
+            Some(claurst_core::effort::EffortLevel::High),
+            None,
+        );
+        assert_eq!(
+            options["thinkingConfig"]["thinkingLevel"],
+            serde_json::json!("high")
+        );
+        assert_eq!(
+            options["thinkingConfig"]["includeThoughts"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn test_build_provider_options_for_openrouter_gpt5() {
+        let options = build_provider_options(
+            "openrouter",
+            "gpt-5.4",
+            Some(claurst_core::effort::EffortLevel::Medium),
+            None,
+        );
+        assert_eq!(options["reasoningEffort"], serde_json::json!("medium"));
+        assert_eq!(options["textVerbosity"], serde_json::json!("low"));
+        assert_eq!(options["usage"]["include"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn test_build_provider_options_for_bedrock_anthropic() {
+        let options = build_provider_options(
+            "amazon-bedrock",
+            "anthropic.claude-sonnet-4-6-v1",
+            Some(claurst_core::effort::EffortLevel::High),
+            Some(10_000),
+        );
+        assert_eq!(
+            options["reasoningConfig"]["budgetTokens"],
+            serde_json::json!(10_000)
+        );
     }
 }
 

@@ -28,6 +28,8 @@ use crate::provider_types::{
     StreamEvent, SystemPrompt, SystemPromptStyle,
 };
 
+use super::request_options::merge_google_options;
+
 // ---------------------------------------------------------------------------
 // GoogleProvider
 // ---------------------------------------------------------------------------
@@ -55,7 +57,7 @@ impl GoogleProvider {
 
     /// Returns true if the model supports thinking config (Gemini 2.5+ / 3.0+).
     fn supports_thinking(model: &str) -> bool {
-        model.contains("2.5") || model.contains("3.0")
+        model.contains("2.5") || model.contains("3.0") || model.contains("3.1") || model.contains("gemini-3")
     }
 
     /// Build the full generateContent URL for non-streaming.
@@ -375,7 +377,7 @@ impl GoogleProvider {
         }
 
         // Thinking config for supported models.
-        if Self::supports_thinking(&request.model) {
+        if Self::supports_thinking(&request.model) && request.thinking.is_some() {
             let budget = request
                 .thinking
                 .as_ref()
@@ -383,7 +385,10 @@ impl GoogleProvider {
                 .unwrap_or(8192);
             gen_config.insert(
                 "thinkingConfig".to_string(),
-                json!({ "thinkingBudget": budget }),
+                json!({
+                    "includeThoughts": true,
+                    "thinkingBudget": budget
+                }),
             );
         }
 
@@ -401,7 +406,9 @@ impl GoogleProvider {
             body.insert("tools".to_string(), tools);
         }
 
-        Value::Object(body)
+        let mut value = Value::Object(body);
+        merge_google_options(&mut value, &request.provider_options);
+        value
     }
 
     /// Parse a Google error JSON body and return the appropriate ProviderError.

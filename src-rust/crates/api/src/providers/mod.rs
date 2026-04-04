@@ -1,6 +1,8 @@
 pub mod anthropic;
 pub use anthropic::AnthropicProvider;
 
+pub(crate) mod request_options;
+
 pub mod openai;
 pub use openai::OpenAiProvider;
 

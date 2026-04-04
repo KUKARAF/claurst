@@ -2069,9 +2069,18 @@ impl App {
                         let provider_id = self.device_auth_dialog.provider_id.clone();
                         let provider_name = self.device_auth_dialog.provider_name.clone();
                         let token = token.clone();
+                        let credential = if provider_id == "github-copilot" {
+                            claurst_core::StoredCredential::OAuthToken {
+                                access: token.clone(),
+                                refresh: token,
+                                expires: 0,
+                            }
+                        } else {
+                            claurst_core::StoredCredential::ApiKey { key: token }
+                        };
                         self.auth_store.set(
                             &provider_id,
-                            claurst_core::StoredCredential::ApiKey { key: token },
+                            credential,
                         );
                         self.set_provider_default(provider_id.clone());
                         self.persist_provider_and_model();
@@ -3961,6 +3970,7 @@ impl App {
         // ---- Dialog interaction: dismiss on click-outside, scroll/click inside ----
         let any_dialog = self.connect_dialog.visible
             || self.command_palette.visible
+            || self.key_input_dialog.visible
             || self.device_auth_dialog.visible
             || self.model_picker.visible
             || self.export_dialog.visible
@@ -4351,6 +4361,7 @@ impl App {
 
             // Expire old notifications
             self.notifications.tick();
+            self.memory_update_notification.tick();
 
             // Drain background model-fetch results (non-blocking).
             if let Some(ref mut rx) = self.model_fetch_rx {

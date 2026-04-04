@@ -33,6 +33,7 @@ use crate::messages::{RenderContext, render_markdown, render_message};
 use crate::notifications::render_notification_banner;
 use crate::overlays::{
     render_global_search, render_help_overlay, render_history_search_overlay, render_rewind_flow,
+    CLAURST_ACCENT,
 };
 use crate::plugin_views::render_plugin_hints;
 use crate::privacy_screen::render_privacy_screen;
@@ -75,6 +76,45 @@ fn spinner_color(app: &App) -> Color {
         }
     }
     Color::Yellow
+}
+
+fn is_modal_open(app: &App) -> bool {
+    app.permission_request.is_some()
+        || app.rewind_flow.visible
+        || app.tasks_overlay.visible
+        || app.help_overlay.visible
+        || app.show_help
+        || app.history_search_overlay.visible
+        || app.history_search.is_some()
+        || app.settings_screen.visible
+        || app.theme_screen.visible
+        || app.privacy_screen.visible
+        || app.stats_dialog.open
+        || app.mcp_view.open
+        || app.agents_menu.open
+        || app.diff_viewer.open
+        || app.global_search.open
+        || app.feedback_survey.visible
+        || app.memory_file_selector.visible
+        || app.hooks_config_menu.visible
+        || app.overage_upsell.visible
+        || app.voice_mode_notice.visible
+        || app.memory_update_notification.visible
+        || app.desktop_upsell.visible
+        || app.invalid_config_dialog.visible
+        || app.bypass_permissions_dialog.visible
+        || app.onboarding_dialog.visible
+        || app.connect_dialog.visible
+        || app.key_input_dialog.visible
+        || app.device_auth_dialog.visible
+        || app.command_palette.visible
+        || app.elicitation.visible
+        || app.model_picker.visible
+        || app.session_browser.visible
+        || app.session_branching.visible
+        || app.export_dialog.visible
+        || app.context_viz.visible
+        || app.mcp_approval.visible
 }
 
 // -----------------------------------------------------------------------
@@ -578,20 +618,15 @@ pub fn render_app(frame: &mut Frame, app: &App) {
         render_mcp_approval_dialog(&app.mcp_approval, size, frame.buffer_mut());
     }
 
-    // Notification banner (bottom of overlays stack so it's always visible)
-    if !app.notifications.is_empty() {
+    let modal_active = is_modal_open(app);
+
+    // Notification banner stays out of the way when a modal owns the screen.
+    if !modal_active && !app.notifications.is_empty() {
         render_notification_banner(frame, &app.notifications, size);
     }
 
     // ---- Text selection highlight (topmost post-pass) ---------------------
     // Only show selection when no full-screen modal overlay is active.
-    let modal_active = app.settings_screen.visible
-        || app.theme_screen.visible
-        || app.privacy_screen.visible
-        || app.bypass_permissions_dialog.visible
-        || app.rewind_flow.visible
-        || app.help_overlay.visible
-        || app.global_search.open;
     if !modal_active {
         apply_selection_highlight(frame, app);
         // Render context menu on top of selection
@@ -1725,15 +1760,8 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         spans
     };
 
-    // Right side: notifications take priority, otherwise build status parts
-    let right_spans: Vec<Span> = if let Some(notification) = app.notifications.current() {
-        vec![Span::styled(
-            notification.message.clone(),
-            Style::default()
-                .fg(notification.kind.color())
-                .add_modifier(Modifier::BOLD),
-        )]
-    } else {
+    // Right side: status metrics and lightweight badges.
+    let right_spans: Vec<Span> = {
         let mut parts: Vec<Span> = Vec::new();
 
         // 1. Context window usage — show "N% until auto-compact" mirroring TS TokenWarning
@@ -1845,7 +1873,7 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
             }
             parts.push(Span::styled(
                 format!("[{}]", badge),
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(CLAURST_ACCENT),
             ));
         }
 

@@ -81,9 +81,26 @@ impl AuthStore {
     /// falling back to the relevant environment variable.
     pub fn api_key_for(&self, provider_id: &str) -> Option<String> {
         // Check stored credentials first
-        if let Some(StoredCredential::ApiKey { key }) = self.get(provider_id) {
-            if !key.is_empty() {
-                return Some(key.clone());
+        if let Some(stored) = self.get(provider_id) {
+            match stored {
+                StoredCredential::ApiKey { key } => {
+                    if !key.is_empty() {
+                        return Some(key.clone());
+                    }
+                }
+                StoredCredential::OAuthToken {
+                    access,
+                    refresh,
+                    ..
+                } if provider_id == "github-copilot" => {
+                    if !refresh.is_empty() {
+                        return Some(refresh.clone());
+                    }
+                    if !access.is_empty() {
+                        return Some(access.clone());
+                    }
+                }
+                _ => {}
             }
         }
         // Fall back to environment variable

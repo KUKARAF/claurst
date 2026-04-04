@@ -34,6 +34,8 @@ use crate::provider_types::{
 };
 use crate::provider_types::SystemPrompt;
 
+use super::request_options::merge_openai_compatible_options;
+
 // ---------------------------------------------------------------------------
 // OpenAiProvider
 // ---------------------------------------------------------------------------
@@ -369,6 +371,7 @@ impl OpenAiProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let (auth_key, auth_val) = self.auth_header();
         let url = format!("{}/v1/chat/completions", self.base_url);
@@ -565,6 +568,7 @@ impl OpenAiProvider {
         if !request.stop_sequences.is_empty() {
             body["stop"] = json!(request.stop_sequences);
         }
+        merge_openai_compatible_options(&mut body, &request.provider_options);
 
         let (auth_key, auth_val) = self.auth_header();
         let url = format!("{}/v1/chat/completions", self.base_url);

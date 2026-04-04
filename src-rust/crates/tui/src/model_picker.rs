@@ -330,6 +330,7 @@ pub fn models_for_provider(provider_id: &str) -> Vec<ModelEntry> {
             model_entry("gpt-4.1", "GPT-4.1", "via Copilot"),
             model_entry("gpt-4o", "GPT-4o", "via Copilot"),
             model_entry("gpt-4o-mini", "GPT-4o mini", "via Copilot"),
+            model_entry("gpt-5.4", "GPT-5.4", "via Copilot"),
             model_entry("gpt-5-mini", "GPT-5 mini", "via Copilot"),
             model_entry("o3-mini", "o3 mini", "via Copilot"),
             model_entry("o4-mini", "o4 mini", "via Copilot"),

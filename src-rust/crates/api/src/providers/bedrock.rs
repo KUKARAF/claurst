@@ -31,6 +31,8 @@ use crate::provider_types::{
     StreamEvent, SystemPrompt, SystemPromptStyle,
 };
 
+use super::request_options::merge_bedrock_options;
+
 // ---------------------------------------------------------------------------
 // BedrockProvider
 // ---------------------------------------------------------------------------
@@ -302,6 +304,15 @@ impl BedrockProvider {
                 .collect();
             body["toolConfig"] = json!({ "tools": tool_specs });
         }
+
+        if let Some(thinking) = &request.thinking {
+            body["reasoningConfig"] = json!({
+                "type": "enabled",
+                "budgetTokens": thinking.budget_tokens,
+            });
+        }
+
+        merge_bedrock_options(&mut body, &request.provider_options);
 
         body
     }
