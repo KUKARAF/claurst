@@ -151,7 +151,26 @@ pub use device_auth_dialog::{DeviceAuthDialogState, DeviceAuthStatus, DeviceAuth
 // ---------------------------------------------------------------------------
 
 /// Set up the terminal for TUI mode (raw mode + alternate screen + mouse capture).
+///
+/// Also installs a panic hook that restores the terminal before printing the
+/// panic message.  Without this, any panic in rendering code leaves the
+/// terminal in raw mode with mouse capture enabled — the user sees garbage
+/// input until they run `reset`.
 pub fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
+    // Chain on top of any existing hook (e.g. from a previous call or test harness).
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // Best-effort restore — ignore errors, we're already unwinding.
+        let _ = disable_raw_mode();
+        let _ = execute!(
+            io::stdout(),
+            LeaveAlternateScreen,
+            DisableMouseCapture,
+            crossterm::cursor::Show,
+        );
+        original_hook(panic_info);
+    }));
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
