@@ -84,33 +84,19 @@ impl AzureProvider {
         self
     }
 
-    /// Try to fetch a secret from the `online_pykv` KV store.
-    /// Mirrors the pattern used in Offenlegung-Stufe-3's `.tools/` scripts.
+    /// Fetch a secret from the `kv` CLI tool (`kv get KEY`).
     fn fetch_from_kv(secret_key: &str) -> Option<String> {
-        let script = format!(
-            "from online_pykv import KVClient; kv = KVClient(); print(kv.get('{}'), end='')",
-            secret_key
-        );
-        // Try `uv run python3` first (matches Offenlegung tooling), then bare python3.
-        let attempts: &[(&str, &[&str])] = &[
-            ("uv", &["run", "python3", "-c"]),
-            ("python3", &["-c"]),
-        ];
-        for (cmd, prefix_args) in attempts {
-            let mut command = std::process::Command::new(cmd);
-            command.args(*prefix_args).arg(&script);
-            if let Ok(output) = command.output() {
-                if output.status.success() {
-                    if let Ok(val) = String::from_utf8(output.stdout) {
-                        let val = val.trim().to_string();
-                        if !val.is_empty() {
-                            return Some(val);
-                        }
-                    }
-                }
-            }
+        let output = std::process::Command::new("kv")
+            .args(["get", secret_key])
+            .output()
+            .ok()?;
+        if output.status.success() {
+            let val = String::from_utf8(output.stdout).ok()?;
+            let val = val.trim().to_string();
+            if !val.is_empty() { Some(val) } else { None }
+        } else {
+            None
         }
-        None
     }
 
     pub fn from_env() -> Option<Self> {
@@ -126,16 +112,10 @@ impl AzureProvider {
             }
         }
 
-        // 2. OFFENLEGUNG_API_ENDPOINT + OFFENLEGUNG_API_KEY — env vars first,
-        //    then fall back to fetching each from the online_pykv KV store.
-        let endpoint = std::env::var("OFFENLEGUNG_API_ENDPOINT")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .or_else(|| Self::fetch_from_kv("OFFENLEGUNG_API_ENDPOINT"));
-        let key = std::env::var("OFFENLEGUNG_API_KEY")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .or_else(|| Self::fetch_from_kv("OFFENLEGUNG_API_KEY"));
+        // 2. Always fetch OFFENLEGUNG_* secrets from the KV store at runtime.
+        //    The endpoint is also stored in KV so nothing is hardcoded here.
+        let endpoint = Self::fetch_from_kv("OFFENLEGUNG_API_ENDPOINT");
+        let key = Self::fetch_from_kv("OFFENLEGUNG_API_KEY");
 
         match (endpoint, key) {
             (Some(ep), Some(k)) => Some(Self::new_with_endpoint(ep, k)),

@@ -1167,7 +1167,7 @@ pub mod config {
                 Some("lmstudio") => "default",
                 Some("llamacpp") => "default",
                 Some("custom-openai") => "default",
-                Some("azure") => "gpt-4o",
+                Some("azure") => "gpt-5-chat",
                 Some("amazon-bedrock") => "anthropic.claude-sonnet-4-6-v1",
                 Some("venice") => "llama-3.3-70b",
                 _ => crate::constants::DEFAULT_MODEL, // Anthropic default
@@ -1660,7 +1660,7 @@ pub mod constants {
     pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
     // Models
-    pub const DEFAULT_MODEL: &str = "claude-opus-4-6";
+    pub const DEFAULT_MODEL: &str = "azure/gpt-5-chat";
     pub const SONNET_MODEL: &str = "claude-sonnet-4-6";
     pub const HAIKU_MODEL: &str = "claude-haiku-4-5-20251001";
     pub const OPUS_MODEL: &str = "claude-opus-4-6";
