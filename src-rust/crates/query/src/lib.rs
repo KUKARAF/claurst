@@ -218,7 +218,7 @@ fn google_thinking_level_for_effort(
 
 fn is_openai_reasoning_model(model_id: &str) -> bool {
     let model_id = model_id.to_ascii_lowercase();
-    model_id.starts_with("gpt-5")
+    (model_id.starts_with("gpt-5") && !model_id.contains("-chat"))
         || model_id.starts_with("o1")
         || model_id.starts_with("o3")
         || model_id.starts_with("o4")
