@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build x86_64 Linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libssl-dev pkg-config
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-rust/target
+          key: x86_64-unknown-linux-gnu-cargo-${{ hashFiles('src-rust/Cargo.lock') }}
+          restore-keys: x86_64-unknown-linux-gnu-cargo-
+
+      - name: Build release binary
+        working-directory: src-rust
+        run: cargo build --release --locked --package claurst --target x86_64-unknown-linux-gnu
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claurst-linux-x86_64
+          path: src-rust/target/x86_64-unknown-linux-gnu/release/claurst
+
+      # On pushes to main: delete and recreate the rolling "latest" pre-release
+      # so the binary is always up to date.
+      - name: Publish to latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            --title "Latest build" \
+            --notes "Automated build from [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" \
+            --prerelease \
+            "src-rust/target/x86_64-unknown-linux-gnu/release/claurst#claurst-linux-x86_64"

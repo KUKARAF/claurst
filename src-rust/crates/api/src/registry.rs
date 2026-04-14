@@ -120,11 +120,35 @@ pub fn provider_from_config(
                         .filter(|value| !value.is_empty())
                 });
 
+            // Full-endpoint style: OFFENLEGUNG_API_ENDPOINT + OFFENLEGUNG_API_KEY
+            // (mirrors Offenlegung-Stufe-3 configuration).
+            let offenlegung_endpoint = provider_cfg
+                .and_then(|p| p.options.get("endpoint"))
+                .and_then(|v| v.as_str())
+                .filter(|v| !v.is_empty())
+                .map(str::to_owned)
+                .or_else(|| {
+                    std::env::var("OFFENLEGUNG_API_ENDPOINT")
+                        .ok()
+                        .filter(|v| !v.is_empty())
+                });
+            let offenlegung_key = api_key.clone().or_else(|| {
+                std::env::var("OFFENLEGUNG_API_KEY")
+                    .ok()
+                    .filter(|v| !v.is_empty())
+            });
+
             match (resource_name, api_key) {
                 (Some(resource_name), Some(key)) => Some(
                     Arc::new(AzureProvider::new(resource_name, key)) as Arc<dyn LlmProvider>
                 ),
-                _ => None,
+                _ => match (offenlegung_endpoint, offenlegung_key) {
+                    (Some(ep), Some(key)) => Some(
+                        Arc::new(AzureProvider::new_with_endpoint(ep, key))
+                            as Arc<dyn LlmProvider>,
+                    ),
+                    _ => None,
+                },
             }
         }
         "ollama" => {

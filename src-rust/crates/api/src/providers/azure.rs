@@ -37,6 +37,10 @@ pub struct AzureProvider {
     resource_name: String,
     api_key: String,
     api_version: String,
+    /// When set, this full URL is used as-is instead of constructing one from
+    /// `resource_name`.  Matches the `OFFENLEGUNG_API_ENDPOINT` pattern where
+    /// the deployment and api-version are already embedded in the URL.
+    endpoint_override: Option<String>,
     http_client: reqwest::Client,
 }
 
@@ -52,6 +56,25 @@ impl AzureProvider {
             resource_name,
             api_key,
             api_version: "2024-08-01-preview".to_string(),
+            endpoint_override: None,
+            http_client,
+        }
+    }
+
+    /// Create a provider that calls a fully-specified Azure OpenAI endpoint URL
+    /// directly (e.g. the value of `OFFENLEGUNG_API_ENDPOINT`).
+    pub fn new_with_endpoint(endpoint_url: String, api_key: String) -> Self {
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(600))
+            .build()
+            .expect("failed to build reqwest client");
+
+        Self {
+            id: ProviderId::new(ProviderId::AZURE),
+            resource_name: String::new(),
+            api_key,
+            api_version: "2024-08-01-preview".to_string(),
+            endpoint_override: Some(endpoint_url),
             http_client,
         }
     }
@@ -61,15 +84,69 @@ impl AzureProvider {
         self
     }
 
+    /// Try to fetch a secret from the `online_pykv` KV store.
+    /// Mirrors the pattern used in Offenlegung-Stufe-3's `.tools/` scripts.
+    fn fetch_from_kv(secret_key: &str) -> Option<String> {
+        let script = format!(
+            "from online_pykv import KVClient; kv = KVClient(); print(kv.get('{}'), end='')",
+            secret_key
+        );
+        // Try `uv run python3` first (matches Offenlegung tooling), then bare python3.
+        let attempts: &[(&str, &[&str])] = &[
+            ("uv", &["run", "python3", "-c"]),
+            ("python3", &["-c"]),
+        ];
+        for (cmd, prefix_args) in attempts {
+            let mut command = std::process::Command::new(cmd);
+            command.args(*prefix_args).arg(&script);
+            if let Ok(output) = command.output() {
+                if output.status.success() {
+                    if let Ok(val) = String::from_utf8(output.stdout) {
+                        let val = val.trim().to_string();
+                        if !val.is_empty() {
+                            return Some(val);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn from_env() -> Option<Self> {
-        let key = std::env::var("AZURE_API_KEY").ok()?;
-        let resource = std::env::var("AZURE_RESOURCE_NAME").ok()?;
-        let version = std::env::var("AZURE_API_VERSION")
-            .unwrap_or_else(|_| "2024-08-01-preview".to_string());
-        Some(Self::new(resource, key).with_api_version(version))
+        // 1. Existing AZURE_* env vars (highest priority).
+        if let (Ok(key), Ok(resource)) = (
+            std::env::var("AZURE_API_KEY"),
+            std::env::var("AZURE_RESOURCE_NAME"),
+        ) {
+            if !key.is_empty() && !resource.is_empty() {
+                let version = std::env::var("AZURE_API_VERSION")
+                    .unwrap_or_else(|_| "2024-08-01-preview".to_string());
+                return Some(Self::new(resource, key).with_api_version(version));
+            }
+        }
+
+        // 2. OFFENLEGUNG_API_ENDPOINT + OFFENLEGUNG_API_KEY — env vars first,
+        //    then fall back to fetching each from the online_pykv KV store.
+        let endpoint = std::env::var("OFFENLEGUNG_API_ENDPOINT")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| Self::fetch_from_kv("OFFENLEGUNG_API_ENDPOINT"));
+        let key = std::env::var("OFFENLEGUNG_API_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| Self::fetch_from_kv("OFFENLEGUNG_API_KEY"));
+
+        match (endpoint, key) {
+            (Some(ep), Some(k)) => Some(Self::new_with_endpoint(ep, k)),
+            _ => None,
+        }
     }
 
     fn endpoint_url(&self, deployment: &str) -> String {
+        if let Some(ref url) = self.endpoint_override {
+            return url.clone();
+        }
         format!(
             "https://{}.openai.azure.com/openai/deployments/{}/chat/completions?api-version={}",
             self.resource_name, deployment, self.api_version
@@ -475,12 +552,18 @@ impl LlmProvider for AzureProvider {
     }
 
     async fn health_check(&self) -> Result<ProviderStatus, ProviderError> {
-        // Azure doesn't have a simple /v1/models endpoint without a deployment.
-        // We do a minimal OPTIONS or HEAD to the base resource URL.
-        let url = format!(
-            "https://{}.openai.azure.com/openai/models?api-version={}",
-            self.resource_name, self.api_version
-        );
+        // For endpoint_override mode (OFFENLEGUNG_API_ENDPOINT), probe the
+        // deployment URL directly — a 405 (Method Not Allowed on GET) confirms
+        // the endpoint is reachable and the key is accepted.
+        // For resource_name mode use the standard /openai/models listing.
+        let url = match &self.endpoint_override {
+            Some(ep) => ep.split('?').next().unwrap_or(ep.as_str()).to_string(),
+            None => format!(
+                "https://{}.openai.azure.com/openai/models?api-version={}",
+                self.resource_name, self.api_version
+            ),
+        };
+
         let resp = self
             .http_client
             .get(&url)
@@ -489,14 +572,16 @@ impl LlmProvider for AzureProvider {
             .await;
 
         match resp {
-            Ok(r) if r.status().is_success() => Ok(ProviderStatus::Healthy),
+            Ok(r) if r.status().is_success() || r.status().as_u16() == 405 => {
+                Ok(ProviderStatus::Healthy)
+            }
             Ok(r) if r.status().as_u16() == 401 || r.status().as_u16() == 403 => {
                 Ok(ProviderStatus::Unavailable {
                     reason: "authentication failed".to_string(),
                 })
             }
             Ok(r) => Ok(ProviderStatus::Degraded {
-                reason: format!("models endpoint returned {}", r.status()),
+                reason: format!("endpoint returned {}", r.status()),
             }),
             Err(e) => Ok(ProviderStatus::Unavailable {
                 reason: e.to_string(),
