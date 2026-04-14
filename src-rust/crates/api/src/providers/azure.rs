@@ -351,6 +351,22 @@ impl LlmProvider for AzureProvider {
                     };
 
                     if data == "[DONE]" {
+                        if !message_started {
+                            yield Ok(StreamEvent::MessageStart {
+                                id: message_id.clone(),
+                                model: model_name.clone(),
+                                usage: UsageInfo::default(),
+                            });
+                            yield Ok(StreamEvent::ContentBlockStart {
+                                index: 0,
+                                content_block: ContentBlock::Text { text: String::new() },
+                            });
+                            yield Ok(StreamEvent::ContentBlockStop { index: 0 });
+                            yield Ok(StreamEvent::MessageDelta {
+                                stop_reason: Some("end_turn".to_string()),
+                                usage: None,
+                            });
+                        }
                         yield Ok(StreamEvent::MessageStop);
                         return;
                     }
@@ -490,9 +506,25 @@ impl LlmProvider for AzureProvider {
                 }
             }
 
-            if message_started {
-                yield Ok(StreamEvent::MessageStop);
+            // Stream ended without a [DONE] marker — emit the full sequence
+            // so the UI always gets a clean MessageStop regardless.
+            if !message_started {
+                yield Ok(StreamEvent::MessageStart {
+                    id: message_id.clone(),
+                    model: model_name.clone(),
+                    usage: UsageInfo::default(),
+                });
+                yield Ok(StreamEvent::ContentBlockStart {
+                    index: 0,
+                    content_block: ContentBlock::Text { text: String::new() },
+                });
+                yield Ok(StreamEvent::ContentBlockStop { index: 0 });
+                yield Ok(StreamEvent::MessageDelta {
+                    stop_reason: Some("end_turn".to_string()),
+                    usage: None,
+                });
             }
+            yield Ok(StreamEvent::MessageStop);
         };
 
         Ok(Box::pin(s))
