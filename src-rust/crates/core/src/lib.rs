@@ -1178,8 +1178,16 @@ pub mod config {
 
         /// Resolve the effective max-tokens.
         pub fn effective_max_tokens(&self) -> u32 {
-            self.max_tokens
-                .unwrap_or(crate::constants::DEFAULT_MAX_TOKENS)
+            if let Some(t) = self.max_tokens {
+                return t;
+            }
+            // gpt-5-chat on Azure caps at 16 384 completion tokens.
+            if self.provider.as_deref() == Some("azure")
+                || self.effective_model().contains("gpt-5-chat")
+            {
+                return 16_384;
+            }
+            crate::constants::DEFAULT_MAX_TOKENS
         }
 
         /// Resolve the effective compact threshold (0.0 - 1.0).
