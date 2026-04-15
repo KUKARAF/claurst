@@ -1182,8 +1182,8 @@ pub mod config {
                 return t;
             }
             // gpt-5-chat on Azure caps at 16 384 completion tokens.
-            if self.provider.as_deref() == Some("azure")
-                || self.effective_model().contains("gpt-5-chat")
+            if self.effective_model().contains("gpt-5-chat")
+                && self.provider.as_deref() == Some("azure")
             {
                 return 16_384;
             }
