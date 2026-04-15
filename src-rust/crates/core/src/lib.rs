@@ -1181,10 +1181,15 @@ pub mod config {
             if let Some(t) = self.max_tokens {
                 return t;
             }
-            // gpt-5-chat on Azure caps at 16 384 completion tokens.
-            if self.effective_model().contains("gpt-5-chat")
-                && self.provider.as_deref() == Some("azure")
-            {
+            // Azure model token caps (queried from the Azure API):
+            //   gpt-5: 128 000 (uses max_completion_tokens, not max_tokens)
+            //   all other Azure models: 16 384
+            if self.provider.as_deref() == Some("azure") {
+                let model = self.effective_model();
+                let model = model.to_ascii_lowercase();
+                if model == "gpt-5" || model.starts_with("gpt-5-2025") {
+                    return 128_000;
+                }
                 return 16_384;
             }
             crate::constants::DEFAULT_MAX_TOKENS

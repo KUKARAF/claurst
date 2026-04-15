@@ -147,12 +147,23 @@ impl AzureProvider {
         );
         let tools = OpenAiProvider::to_openai_tools_pub(&request.tools);
 
-        let mut body = json!({
-            "model": request.model,
-            "max_tokens": request.max_tokens,
-            "messages": messages,
-            "stream": false,
-        });
+        let is_gpt5 = request.model.to_ascii_lowercase().starts_with("gpt-5")
+            && !request.model.to_ascii_lowercase().contains("-chat");
+        let mut body = if is_gpt5 {
+            json!({
+                "model": request.model,
+                "max_completion_tokens": request.max_tokens,
+                "messages": messages,
+                "stream": false,
+            })
+        } else {
+            json!({
+                "model": request.model,
+                "max_tokens": request.max_tokens,
+                "messages": messages,
+                "stream": false,
+            })
+        };
 
         if !tools.is_empty() {
             body["tools"] = json!(tools);
@@ -217,13 +228,25 @@ impl AzureProvider {
         );
         let tools = OpenAiProvider::to_openai_tools_pub(&request.tools);
 
-        let mut body = json!({
-            "model": request.model,
-            "max_tokens": request.max_tokens,
-            "messages": messages,
-            "stream": true,
-            "stream_options": { "include_usage": true },
-        });
+        let is_gpt5 = request.model.to_ascii_lowercase().starts_with("gpt-5")
+            && !request.model.to_ascii_lowercase().contains("-chat");
+        let mut body = if is_gpt5 {
+            json!({
+                "model": request.model,
+                "max_completion_tokens": request.max_tokens,
+                "messages": messages,
+                "stream": true,
+                "stream_options": { "include_usage": true },
+            })
+        } else {
+            json!({
+                "model": request.model,
+                "max_tokens": request.max_tokens,
+                "messages": messages,
+                "stream": true,
+                "stream_options": { "include_usage": true },
+            })
+        };
 
         if !tools.is_empty() {
             body["tools"] = json!(tools);
@@ -532,6 +555,50 @@ impl LlmProvider for AzureProvider {
 
     async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
         Ok(vec![
+            // gpt-5: 128k completion tokens, uses max_completion_tokens param
+            ModelInfo {
+                id: ModelId::new("gpt-5"),
+                provider_id: self.id.clone(),
+                name: "GPT-5 (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 128_000,
+            },
+            // All other Azure models cap at 16 384 completion tokens
+            ModelInfo {
+                id: ModelId::new("gpt-5-chat"),
+                provider_id: self.id.clone(),
+                name: "GPT-5 Chat (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 16_384,
+            },
+            ModelInfo {
+                id: ModelId::new("gpt-5.2-chat"),
+                provider_id: self.id.clone(),
+                name: "GPT-5.2 Chat (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 16_384,
+            },
+            ModelInfo {
+                id: ModelId::new("gpt-5.3-codex"),
+                provider_id: self.id.clone(),
+                name: "GPT-5.3 Codex (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 16_384,
+            },
+            ModelInfo {
+                id: ModelId::new("gpt-5.4"),
+                provider_id: self.id.clone(),
+                name: "GPT-5.4 (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 16_384,
+            },
+            ModelInfo {
+                id: ModelId::new("gpt-4.1"),
+                provider_id: self.id.clone(),
+                name: "GPT-4.1 (Azure)".to_string(),
+                context_window: 1_000_000,
+                max_output_tokens: 16_384,
+            },
             ModelInfo {
                 id: ModelId::new("gpt-4o"),
                 provider_id: self.id.clone(),
