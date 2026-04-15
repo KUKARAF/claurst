@@ -147,7 +147,11 @@ impl AzureProvider {
         );
         let tools = OpenAiProvider::to_openai_tools_pub(&request.tools);
 
-        let is_gpt5 = request.model.to_ascii_lowercase().starts_with("gpt-5")
+        // Only use max_completion_tokens for gpt-5 when hitting a direct
+        // deployment (no endpoint_override). The OFFENLEGUNG endpoint
+        // always points to gpt-4o-600k which uses max_tokens.
+        let is_gpt5 = self.endpoint_override.is_none()
+            && request.model.to_ascii_lowercase().starts_with("gpt-5")
             && !request.model.to_ascii_lowercase().contains("-chat");
         let mut body = if is_gpt5 {
             json!({
@@ -228,7 +232,11 @@ impl AzureProvider {
         );
         let tools = OpenAiProvider::to_openai_tools_pub(&request.tools);
 
-        let is_gpt5 = request.model.to_ascii_lowercase().starts_with("gpt-5")
+        // Only use max_completion_tokens for gpt-5 when hitting a direct
+        // deployment (no endpoint_override). The OFFENLEGUNG endpoint
+        // always points to gpt-4o-600k which uses max_tokens.
+        let is_gpt5 = self.endpoint_override.is_none()
+            && request.model.to_ascii_lowercase().starts_with("gpt-5")
             && !request.model.to_ascii_lowercase().contains("-chat");
         let mut body = if is_gpt5 {
             json!({

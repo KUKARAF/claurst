@@ -1181,15 +1181,11 @@ pub mod config {
             if let Some(t) = self.max_tokens {
                 return t;
             }
-            // Azure model token caps (queried from the Azure API):
-            //   gpt-5: 128 000 (uses max_completion_tokens, not max_tokens)
-            //   all other Azure models: 16 384
+            // All Azure models in this deployment cap at 16 384 completion tokens.
+            // (The OFFENLEGUNG endpoint always routes through gpt-4o-600k.)
+            // Direct gpt-5 deployments support 128k via max_completion_tokens,
+            // but that is handled in the provider layer, not here.
             if self.provider.as_deref() == Some("azure") {
-                let model = self.effective_model();
-                let model = model.to_ascii_lowercase();
-                if model == "gpt-5" || model.starts_with("gpt-5-2025") {
-                    return 128_000;
-                }
                 return 16_384;
             }
             crate::constants::DEFAULT_MAX_TOKENS

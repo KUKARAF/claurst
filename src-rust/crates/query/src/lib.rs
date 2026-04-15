@@ -1103,6 +1103,7 @@ pub async fn run_query_loop(
                     let mut usage = UsageInfo::default();
                     let mut stop_str = "end_turn".to_string();
                     let mut msg_id = uuid::Uuid::new_v4().to_string();
+                    let mut stream_error: Option<claurst_api::provider_error::ProviderError> = None;
 
                     use futures::StreamExt as ProviderStreamExt;
                     let provider_stall_timeout = std::time::Duration::from_secs(45);
@@ -1125,6 +1126,7 @@ pub async fn run_query_loop(
                                     None => break,
                                     Some(Err(e)) => {
                                         error!(provider = %provider_id_str, error = %e, "Provider stream error");
+                                        stream_error = Some(e);
                                         break;
                                     }
                                     Some(Ok(evt)) => {
@@ -1172,6 +1174,26 @@ pub async fn run_query_loop(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // If the stream returned an error mid-flight, retry or surface it.
+                    if let Some(ref e) = stream_error {
+                        if retries_left > 0 {
+                            retries_left -= 1;
+                            warn!(provider = %provider_id_str, model = %model_id_str, retries_left, "Stream error — retrying");
+                            if let Some(ref tx) = event_tx {
+                                let _ = tx.send(QueryEvent::Status(format!(
+                                    "Stream error, retrying ({} left)…",
+                                    retries_left + 1
+                                )));
+                            }
+                            turn -= 1;
+                            continue;
+                        } else {
+                            return QueryOutcome::Error(
+                                claurst_core::error::ClaudeError::Api(e.to_string())
+                            );
                         }
                     }
 
