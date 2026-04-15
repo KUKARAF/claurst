@@ -357,7 +357,8 @@ fn build_provider_options(
         }
     }
 
-    if is_openaiish_provider(provider_id) && is_openai_reasoning_model(&model_id) {
+    let azure_gpt5 = provider_id == "azure" && model_id.starts_with("gpt-5");
+    if is_openaiish_provider(provider_id) && is_openai_reasoning_model(&model_id) && !azure_gpt5 {
         let reasoning_effort = effort_level
             .map(reasoning_effort_for_level)
             .unwrap_or("medium");
