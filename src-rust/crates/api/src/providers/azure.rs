@@ -21,8 +21,8 @@ use crate::error_handling::parse_error_response;
 use crate::provider::{LlmProvider, ModelInfo};
 use crate::provider_error::ProviderError;
 use crate::provider_types::{
-    ProviderCapabilities, ProviderRequest, ProviderResponse, ProviderStatus, StreamEvent,
-    SystemPromptStyle,
+    ProviderCapabilities, ProviderRequest, ProviderResponse, ProviderStatus, StopReason,
+    StreamEvent, SystemPromptStyle,
 };
 use crate::providers::openai::OpenAiProvider;
 
@@ -363,7 +363,7 @@ impl LlmProvider for AzureProvider {
                             });
                             yield Ok(StreamEvent::ContentBlockStop { index: 0 });
                             yield Ok(StreamEvent::MessageDelta {
-                                stop_reason: Some("end_turn".to_string()),
+                                stop_reason: Some(StopReason::EndTurn),
                                 usage: None,
                             });
                         }
@@ -520,7 +520,7 @@ impl LlmProvider for AzureProvider {
                 });
                 yield Ok(StreamEvent::ContentBlockStop { index: 0 });
                 yield Ok(StreamEvent::MessageDelta {
-                    stop_reason: Some("end_turn".to_string()),
+                    stop_reason: Some(StopReason::EndTurn),
                     usage: None,
                 });
             }
